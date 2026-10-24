@@ -272,7 +272,8 @@ export function stageSelf() {
   }
 }
 
-/** 写出 watcher 脚本（cmd + 隐藏窗口的 vbs 启动器）。 */
+/** 写出 watcher 脚本（cmd + 隐藏窗口的 vbs 启动器）。cmd 每 15 分钟巡检一次 repair，
+ *  覆盖"同一次开机内 AIMana 自更新"的场景（登录触发覆盖不了这种情况）。 */
 export function writeWatcherScript() {
   const binDir = join(userRoot(), "bin");
   ensureDir(binDir);
@@ -280,8 +281,13 @@ export function writeWatcherScript() {
   const cli = join(stagedAppDir(), "bin", "aimanapp.mjs");
   const cmd = [
     "@echo off",
-    `chcp 65001 >nul`,
-    `"${nodeExe}" "${cli}" repair --quiet >> "${join(logDir(), "watcher.log")}" 2>&1`,
+    "chcp 65001 >nul",
+    ":loop",
+    `if exist "${join(stagedAppDir(), "bin", "aimanapp.mjs")}" (`,
+    `  "${nodeExe}" "${cli}" repair --quiet >> "${join(logDir(), "watcher.log")}" 2>&1`,
+    ")",
+    `timeout /t 900 /nobreak >nul`,
+    "goto loop",
     "",
   ].join("\r\n");
   writeFileSync(join(binDir, "aimanapp-repair.cmd"), cmd, "utf8");
