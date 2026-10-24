@@ -1,0 +1,27 @@
+{
+  "name": "aimana-plusplus",
+  "version": "0.1.0",
+  "description": "AIMana++ —— MT AIMana 桌面应用的本地 tweak（插件）系统",
+  "type": "module",
+  "bin": {
+    "aimanapp": "bin/aimanapp.mjs"
+  },
+  "scripts": {
+    "test": "node bin/aimanapp.mjs validate-tweak tweaks/hello-world"
+  },
+  "keywords": [
+    "aimana",
+    "mt-aimana",
+    "electron",
+    "tweak",
+    "plugin",
+    "loader"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@electron/asar": "^4.3.1"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "id": "com.example.hello-world",
+  "name": "Hello World",
+  "version": "0.1.0",
+  "githubRepo": "zhangmaofa/AIMana-plusplus",
+  "description": "AIMana++ 官方示例插件：在面板里显示问候与应用信息，演示 settings/storage/ipc 的基本用法。",
+  "author": {
+    "name": "zhangmaofa"
+  },
+  "tags": ["example", "ui"],
+  "scope": "renderer",
+  "main": "index.js",
+  "permissions": ["settings", "ipc"]
+}
