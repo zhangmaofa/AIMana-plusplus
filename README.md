@@ -6,10 +6,6 @@
 
 灵感与设计参考 [codex-plusplus](https://github.com/kpkhxlgy0/codex-plusplus)（MIT），在此致谢。
 
-![AIMana++ 面板](docs/screenshot.png)
-
-*AIMana++ 面板（Ctrl+Alt+U 或右下角 ++ 按钮唤起）：插件开关、插件注册的 UI 区块都在这里。*
-
 ## TL;DR
 
 AIMana++ 会修补本机的 AIMana 应用，让它在启动时先加载一个小的 AIMana++ runtime。runtime 不在应用目录里，而在你的用户数据目录中——它从 `tweaks/` 文件夹发现插件并加载。应用内的补丁极小且完全可回滚；你的插件、配置、日志都放在应用外面，改了即生效（面板里点"重载"即可），不用重装任何东西。
