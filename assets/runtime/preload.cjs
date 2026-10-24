@@ -205,6 +205,8 @@ padding:2px 10px;cursor:pointer;font-size:12px}
 .aah-section p{margin:0 0 6px;font-size:11px;color:#9a9aa4}
 .aah-empty{padding:18px 14px;color:#8b8b95;font-size:12px;text-align:center}
 .aah-toggle{color:#7ee2a8;background:none;border:none;cursor:pointer;font-size:11px;padding:0}
+#aimanapp-side-entry{cursor:pointer}
+#aimanapp-side-entry:hover{filter:brightness(1.25)}
 `;
 
   let listedTweaks = [];
@@ -241,13 +243,6 @@ padding:2px 10px;cursor:pointer;font-size:12px}
     `;
     document.body.appendChild(panel);
 
-    const launcher = document.createElement("div");
-    launcher.id = "aimanapp-launcher";
-    launcher.textContent = "++";
-    launcher.title = `AIMana++ 面板 (${hotkey})`;
-    launcher.addEventListener("click", () => togglePanel());
-    document.body.appendChild(launcher);
-
     panel.querySelector('[data-act="close"]').addEventListener("click", () => togglePanel(false));
     panel.querySelector('[data-act="reload"]').addEventListener("click", async () => {
       await ipcRenderer.invoke("aimanapp:reload");
@@ -277,11 +272,176 @@ padding:2px 10px;cursor:pointer;font-size:12px}
     return panel;
   }
 
+  /** 回退入口：右下角悬浮按钮（侧边栏注入失败时才创建）。 */
+  function ensureFloatingLauncher() {
+    if (document.getElementById("aimanapp-launcher")) return;
+    const launcher = document.createElement("div");
+    launcher.id = "aimanapp-launcher";
+    launcher.textContent = "++";
+    launcher.title = `AIMana++ 面板 (${hotkey})`;
+    launcher.addEventListener("click", () => togglePanel());
+    document.body.appendChild(launcher);
+  }
+
+  /** ------------------------------------------------ 左侧栏入口 ---- */
+
+  const SIDEBAR_LABELS = new Set([
+    "chat", "聊天", "cowork", "agent", "智能体", "knowledge", "知识",
+    "skills", "技能", "apps", "应用", "community", "社区",
+  ]);
+  const PLUS_ICON =
+    '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round"><path d="M8 5v14M4 9h8"/><path d="M17 9v10M14 14h6"/></svg>';
+  let sidebarTries = 0;
+
+  /** 定位侧边栏导航容器和 Community 项，克隆一项作为 AIMana++ 入口插到它后面。 */
+  function ensureSidebarEntry() {
+    const existing = document.getElementById("aimanapp-side-entry");
+    if (existing && existing.isConnected) return true;
+
+    // 收集匹配已知导航文案的叶子元素
+    const leaves = [];
+    for (const el of document.querySelectorAll("div,span,a,li,p")) {
+      if (el.children.length > 0) continue;
+      const t = (el.textContent || "").trim().toLowerCase();
+      if (t && SIDEBAR_LABELS.has(t)) leaves.push(el);
+    }
+    if (!leaves.length) return false;
+
+    // 从每个叶子向上走，找一个"直接子节点命中 ≥3 个已知标签"的容器
+    const communityLeaf = leaves.find((el) =>
+      /^(community|社区)$/.test((el.textContent || "").trim().toLowerCase()),
+    );
+    const byLeaf = new Map(); // leaf -> [{container, childOnPath}]
+    for (const leaf of leaves) {
+      const chain = [];
+      let node = leaf;
+      let child = leaf;
+      for (let depth = 0; depth < 8 && node; depth++) {
+        chain.push({ container: node.parentElement, childOnPath: child });
+        child = node;
+        node = node.parentElement;
+      }
+      byLeaf.set(leaf, chain);
+    }
+
+    let best = null; // {container, item}
+    for (const leaf of leaves) {
+      for (const { container, childOnPath } of byLeaf.get(leaf)) {
+        if (!container || container === document.body) continue;
+        const children = [...container.children];
+        if (children.length < 3 || children.length > 40) continue;
+        const matched = new Set();
+        for (const c of children) {
+          const t = (c.textContent || "").trim().toLowerCase();
+          for (const label of SIDEBAR_LABELS) {
+            if (t.includes(label)) {
+              matched.add(label);
+              break;
+            }
+          }
+        }
+        if (matched.size < 3) continue;
+        const score = matched.size;
+        if (!best || score > best.score) {
+          best = { container, item: childOnPath, score };
+        }
+      }
+    }
+    if (!best) return false;
+
+    // 在同级里找 Community 项；找不到就用匹配项本身
+    const children = [...best.container.children];
+    const communityItem = children.find((c) => {
+      const t = (c.textContent || "").trim().toLowerCase();
+      return t.includes("community") || t.includes("社区");
+    });
+    const refItem = communityItem ?? best.item;
+
+    // 克隆 Community 项 → 换文案/图标 → 插到它后面
+    const entry = refItem.cloneNode(true);
+    entry.id = "aimanapp-side-entry";
+    entry.removeAttribute("href");
+    for (const el of entry.querySelectorAll("[href],[title],[aria-label]")) {
+      el.removeAttribute("href");
+      el.removeAttribute("title");
+      el.removeAttribute("aria-label");
+    }
+    // 文案：优先 Community/社区 叶子，否则取最长的文本叶子
+    const textLeafs = [...entry.querySelectorAll("*")].filter(
+      (el) => el.children.length === 0 && (el.textContent || "").trim(),
+    );
+    const labelEl =
+      textLeafs.find((el) => /^(community|社区)$/i.test((el.textContent || "").trim())) ??
+      textLeafs.sort((a, b) => (b.textContent || "").length - (a.textContent || "").length)[0];
+    if (labelEl) labelEl.textContent = "AIMana++";
+    const oldIcon = entry.querySelector("svg");
+    if (oldIcon) {
+      const tpl = document.createElement("template");
+      tpl.innerHTML = PLUS_ICON.trim();
+      oldIcon.replaceWith(tpl.content.firstElementChild);
+    }
+    entry.style.backgroundColor = "transparent";
+    entry.addEventListener(
+      "click",
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        togglePanel();
+      },
+      true,
+    );
+    refItem.insertAdjacentElement("afterend", entry);
+    return true;
+  }
+
+  function startSidebarInjection() {
+    setInterval(() => {
+      try {
+        const entry = document.getElementById("aimanapp-side-entry");
+        if (entry && entry.isConnected) return; // 已在位，最便宜的检查
+        sidebarTries++;
+        if (sidebarTries > 60) {
+          ensureFloatingLauncher();
+          return;
+        }
+        if (ensureSidebarEntry()) {
+          // 成功注入：清掉可能已创建的悬浮按钮
+          document.getElementById("aimanapp-launcher")?.remove();
+        } else if (sidebarTries > 15) {
+          ensureFloatingLauncher();
+        }
+      } catch (_) {}
+    }, 2000);
+  }
+
+  /** 面板打开时贴着侧边栏入口显示；无入口时回退右下角。 */
+  function placePanel() {
+    const panel = panelHost;
+    if (!panel) return;
+    const entry = document.getElementById("aimanapp-side-entry");
+    if (entry && entry.isConnected) {
+      const r = entry.getBoundingClientRect();
+      if (r.width > 0) {
+        panel.style.right = "auto";
+        panel.style.top = "auto";
+        panel.style.left = Math.min(Math.max(r.right + 8, 8), Math.max(window.innerWidth - 380, 8)) + "px";
+        panel.style.bottom = Math.max(window.innerHeight - r.bottom, 12) + "px";
+        return;
+      }
+    }
+    panel.style.left = "auto";
+    panel.style.top = "auto";
+    panel.style.right = "14px";
+    panel.style.bottom = "56px";
+  }
+
   function togglePanel(force) {
     const panel = ensurePanel();
     const open = force !== undefined ? force : !panel.classList.contains("open");
     panel.classList.toggle("open", open);
     if (open) {
+      placePanel();
       renderTweakList();
       renderSections();
     }
@@ -367,6 +527,7 @@ padding:2px 10px;cursor:pointer;font-size:12px}
     const init = () => {
       try {
         ensurePanel();
+        startSidebarInjection();
       } catch (e) {
         slog("error", `面板初始化失败: ${(e && e.stack) || e}`);
       }
